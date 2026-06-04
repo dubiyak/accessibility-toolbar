@@ -116,7 +116,7 @@
 
   const SITE = {
     lang:       attr('lang',        'he'),           // שפת ברירת מחדל
-    position:   attr('position',    'bottom-right'), // bottom-right | bottom-left
+    position:   attr('position',    'bottom-left'),  // bottom-right | bottom-left
     color:      attr('color',       '#1d4ed8'),      // צבע כפתור ראשי (hex)
     storageKey: attr('storage-key', 'a11y-tb-v3'),  // מפתח localStorage ייחודי לאתר
     hide:  new Set((attr('hide', '') || '').split(',').map(s => s.trim()).filter(Boolean)),
