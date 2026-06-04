@@ -160,6 +160,7 @@
   let panelEl = null;
   let guideEl = null;
   let maskEl = null;
+  let cursorEl = null;
 
   function t(key) { return (I18N[state.lang] || I18N.he)[key] || key; }
 
@@ -185,24 +186,45 @@
     state.profile = key;
   }
 
+  // ── Dynamic CSS injector (bypasses Wix/CMS specificity wars) ─────────────────
+  function setCSS(id, css) {
+    let s = document.getElementById(id);
+    if (!s) { s = document.createElement('style'); s.id = id; document.head.appendChild(s); }
+    s.textContent = css;
+  }
+  const EX = '#a11y-toolbar,#a11y-toolbar *,#a11y-guide,#a11y-mask,#a11y-svg,#a11y-cursor';
+
   // ── Apply state → DOM ─────────────────────────────────────────────────────────
   function apply() {
     const html = document.documentElement;
-    const body = document.body;
 
-    html.style.fontSize    = state.fontSize    ? `calc(1em + ${state.fontSize}px)` : '';
-    body.style.lineHeight  = state.lineHeight  ? (1.5 + state.lineHeight).toFixed(1) : '';
-    body.style.letterSpacing = state.letterSpacing ? state.letterSpacing + 'px' : '';
-    body.style.wordSpacing   = state.wordSpacing   ? state.wordSpacing + 'px'   : '';
-    body.style.textAlign     = state.textAlign || '';
+    // Font size — zoom bypasses Wix px font overrides
+    html.style.zoom = state.fontSize ? String(1 + state.fontSize * 0.025) : '';
 
-    if (state.dyslexiaFont) {
-      body.style.fontFamily = '"Arial", "Trebuchet MS", sans-serif';
-      body.style.fontWeight = '500';
-    } else {
-      body.style.fontFamily = '';
-      body.style.fontWeight = '';
-    }
+    // Line height
+    setCSS('a11y-lh', state.lineHeight
+      ? `*:not(${EX}){line-height:${(1.5+state.lineHeight).toFixed(1)}!important}`
+      : '');
+
+    // Letter spacing
+    setCSS('a11y-ls', state.letterSpacing
+      ? `*:not(${EX}){letter-spacing:${state.letterSpacing}px!important}`
+      : '');
+
+    // Word spacing
+    setCSS('a11y-ws', state.wordSpacing
+      ? `*:not(${EX}){word-spacing:${state.wordSpacing}px!important}`
+      : '');
+
+    // Text align
+    setCSS('a11y-ta', state.textAlign
+      ? `p,h1,h2,h3,h4,h5,h6,span,div,li,a,td,th{text-align:${state.textAlign}!important}`
+      : '');
+
+    // Dyslexia font
+    setCSS('a11y-df', state.dyslexiaFont
+      ? `*:not(${EX}){font-family:"Arial","Helvetica Neue",sans-serif!important;font-weight:500!important}`
+      : '');
 
     const contrastClasses = ['a11y-c-dark','a11y-c-light','a11y-c-invert','a11y-c-yb','a11y-c-by'];
     contrastClasses.forEach(c => html.classList.remove(c));
@@ -240,6 +262,12 @@
       maskEl.style.display = 'block';
     } else if (maskEl) maskEl.style.display = 'none';
 
+    // Large cursor — JS overlay (works on Wix where CSS cursor is overridden)
+    if (state.largeCursor) {
+      if (!cursorEl) { cursorEl = el('div', { id:'a11y-cursor', 'aria-hidden':'true' }); document.body.appendChild(cursorEl); }
+      cursorEl.style.display = 'block';
+    } else if (cursorEl) cursorEl.style.display = 'none';
+
     if (!state.tts && window.speechSynthesis) window.speechSynthesis.cancel();
 
     syncUI();
@@ -247,12 +275,15 @@
   }
 
   document.addEventListener('mousemove', (e) => {
-    const y = e.clientY;
+    const x = e.clientX, y = e.clientY;
     if (guideEl && guideEl.style.display !== 'none') guideEl.style.top = y + 'px';
     if (maskEl  && maskEl.style.display  !== 'none') {
       const band = 50;
       maskEl.querySelector('.a11y-mask-top').style.height = Math.max(0, y - band) + 'px';
       maskEl.querySelector('.a11y-mask-bot').style.top    = (y + band) + 'px';
+    }
+    if (cursorEl && cursorEl.style.display !== 'none') {
+      cursorEl.style.transform = `translate(${x}px,${y}px)`;
     }
   });
 
@@ -637,24 +668,31 @@
 #a11y-mask{position:fixed;inset:0;pointer-events:none;z-index:2147483645;display:none}
 .a11y-mask-top{position:fixed;left:0;right:0;top:0;height:0;background:rgba(0,0,0,.6)}
 .a11y-mask-bot{position:fixed;left:0;right:0;bottom:0;top:100%;background:rgba(0,0,0,.6)}
-html.a11y-c-dark,html.a11y-c-dark body{background:#000!important;color:#fff!important}
-html.a11y-c-dark a{color:#7dd3fc!important}
-html.a11y-c-dark button,html.a11y-c-dark input,html.a11y-c-dark select,html.a11y-c-dark textarea{background:#111!important;color:#fff!important;border-color:#555!important}
-html.a11y-c-light,html.a11y-c-light body{background:#fff!important;color:#000!important}
-html.a11y-c-invert{filter:invert(1) hue-rotate(180deg)}
+/* Contrast — filter-based so works on Wix/CMS regardless of specificity */
+html.a11y-c-dark{filter:invert(1) hue-rotate(180deg) brightness(.85)!important}
+html.a11y-c-dark img,html.a11y-c-dark video,html.a11y-c-dark picture{filter:invert(1) hue-rotate(180deg)}
+html.a11y-c-light{filter:brightness(1.25) contrast(.9)!important}
+html.a11y-c-invert{filter:invert(1) hue-rotate(180deg)!important}
 html.a11y-c-invert img,html.a11y-c-invert video{filter:invert(1) hue-rotate(180deg)}
-html.a11y-c-yb,html.a11y-c-yb body{background:#000!important;color:#ff0!important}
-html.a11y-c-yb a{color:#f90!important}
-html.a11y-c-by,html.a11y-c-by body{background:#ff0!important;color:#000!important}
-html.a11y-grayscale{filter:grayscale(1)}
-html.a11y-sat-low{filter:saturate(.25)}
-html.a11y-sat-high{filter:saturate(2.8)}
-html.a11y-cb-protanopia{filter:url(#a11y-filter-protanopia)}
-html.a11y-cb-deuteranopia{filter:url(#a11y-filter-deuteranopia)}
-html.a11y-cb-tritanopia{filter:url(#a11y-filter-tritanopia)}
-html.a11y-pause *,html.a11y-pause *::before,html.a11y-pause *::after{animation-play-state:paused!important;transition:none!important}
-html.a11y-cursor-lg,html.a11y-cursor-lg *{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cpath d='M6 6L6 36L15 27L21 43L26 41L20 25L31 25Z' fill='%23000' stroke='%23fff' stroke-width='2.5'/%3E%3C/svg%3E") 6 6,auto!important}
-html.a11y-focus-hl *:focus{outline:4px solid #f59e0b!important;outline-offset:3px!important;border-radius:2px}
+html.a11y-c-yb{filter:invert(1) hue-rotate(180deg) grayscale(1) sepia(1) saturate(8) hue-rotate(15deg)!important}
+html.a11y-c-yb img,html.a11y-c-yb video{filter:invert(1) hue-rotate(180deg)}
+html.a11y-c-by{filter:grayscale(1) sepia(1) saturate(8) hue-rotate(15deg)!important}
+html.a11y-c-by img,html.a11y-c-by video{filter:grayscale(1) invert(1)}
+/* Color */
+html.a11y-grayscale{filter:grayscale(1)!important}
+html.a11y-sat-low{filter:saturate(.25)!important}
+html.a11y-sat-high{filter:saturate(2.8)!important}
+html.a11y-cb-protanopia{filter:url(#a11y-filter-protanopia)!important}
+html.a11y-cb-deuteranopia{filter:url(#a11y-filter-deuteranopia)!important}
+html.a11y-cb-tritanopia{filter:url(#a11y-filter-tritanopia)!important}
+/* Pause animations — also kill duration so JS-driven ones stop too */
+html.a11y-pause *,html.a11y-pause *::before,html.a11y-pause *::after{animation-play-state:paused!important;animation-duration:.001ms!important;transition-duration:.001ms!important}
+/* Large cursor — handled via JS overlay (#a11y-cursor), CSS just hides native cursor */
+html.a11y-cursor-lg *{cursor:none!important}
+/* Focus highlight */
+html.a11y-focus-hl *:focus,html.a11y-focus-hl *:focus-visible{outline:4px solid #f59e0b!important;outline-offset:3px!important;border-radius:2px!important;box-shadow:0 0 0 6px rgba(245,158,11,.25)!important}
+/* Custom cursor element */
+#a11y-cursor{position:fixed;top:0;left:0;width:48px;height:48px;pointer-events:none;z-index:2147483647;display:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M6 6L6 36L15 27L21 43L26 41L20 25L31 25Z' fill='%23000' stroke='%23fff' stroke-width='2.5'/%3E%3C/svg%3E") no-repeat;transform-origin:6px 6px}
 html.a11y-hl-links a{text-decoration:underline!important;outline:2px solid #f59e0b!important;outline-offset:2px!important;border-radius:2px}
 html.a11y-hl-heads h1,html.a11y-hl-heads h2,html.a11y-hl-heads h3,html.a11y-hl-heads h4,html.a11y-hl-heads h5,html.a11y-hl-heads h6{border-right:4px solid #3b82f6!important;padding-right:10px!important;background:rgba(59,130,246,.08)!important;border-radius:0 6px 6px 0}
 html.a11y-hide-img img,html.a11y-hide-img picture,html.a11y-hide-img figure,html.a11y-hide-img svg:not(#a11y-svg){visibility:hidden!important}
